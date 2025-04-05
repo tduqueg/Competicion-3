@@ -41,12 +41,12 @@ def compute_metrics(eval_pred):
     return {"accuracy": accuracy_score(labels, preds)}
 
 # ============================================================================
-# 1. Función de Entrenamiento y Predicción con Ensamble
+# 1. Entrenamiento y Predicción 
 # ============================================================================
 def train_and_predict(seed, rt_labeled, rt_unlabeled):
     """
     Entrena el modelo con una semilla dada, predice en el dataset de Rotten Tomatoes
-    (con y sin labels), y retorna las predicciones junto con los IDs.
+    y retorna las predicciones.
     """
     set_seed(seed)
     imdb = load_dataset("imdb")
@@ -98,7 +98,7 @@ def train_and_predict(seed, rt_labeled, rt_unlabeled):
     )
     trainer.train()
 
-    # Re-cargar el mejor checkpoint y mover el modelo a GPU si está disponible
+    # Re-cargar el mejor checkpoint
     best_ckpt = trainer.state.best_model_checkpoint
     if best_ckpt:
         model = AutoModelForSequenceClassification.from_pretrained(best_ckpt, num_labels=2)
@@ -107,7 +107,7 @@ def train_and_predict(seed, rt_labeled, rt_unlabeled):
         trainer.model = model
 
     # =========================================================================
-    # Predicción en Rotten Tomatoes (con labels)
+    # Predicción con labels
     # =========================================================================
     ds_rt_labeled = Dataset.from_pandas(rt_labeled)
     ds_rt_labeled = ds_rt_labeled.map(tokenize_fn, batched=True).rename_column("pred", "labels")
@@ -117,7 +117,7 @@ def train_and_predict(seed, rt_labeled, rt_unlabeled):
     preds_rt_labels = np.argmax(preds_rt, axis=1)
 
     # =========================================================================
-    # Predicción en Rotten Tomatoes (sin labels)
+    # Predicción sin labels
     # =========================================================================
     ds_rt_unlabeled = Dataset.from_pandas(rt_unlabeled)
     ds_rt_unlabeled = ds_rt_unlabeled.map(tokenize_fn, batched=True)
@@ -130,18 +130,14 @@ def train_and_predict(seed, rt_labeled, rt_unlabeled):
     return preds_rt_labels, preds_rt_unlab_labels, rt_ids
 
 # ============================================================================
-# 2. Función Principal: Ensamble y CSV de Submission
+# 2. Ensamble y CSV 
 # ============================================================================
 def main():
-    """
-    Ejecuta el entrenamiento con distintas semillas para generar un ensemble,
-    evalúa en Rotten Tomatoes y genera el CSV final de submission.
-    """
     # Cargar datasets de Rotten Tomatoes
     rt_labeled = pd.read_csv(os.path.join("data", "rt_test_with_labels.csv"))
     rt_unlabeled = pd.read_csv(os.path.join("data", "rt_test_unlabeled.csv"))
 
-    # Entrenar con distintas semillas para hacer ensemble
+    # Entrenar con distintas semillas
     seed_list = [42, 2023, 999]
     all_preds_labeled = []
     all_preds_unlabeled = []
@@ -152,14 +148,14 @@ def main():
         all_preds_labeled.append(preds_rt_labels)
         all_preds_unlabeled.append(preds_rt_unlab_labels)
 
-    # Ensemble por votación mayoritaria 
+    # Ensemble por votación
     ensemble_preds_labeled = np.array(all_preds_labeled).T  
     final_labeled = [np.bincount(row).argmax() for row in ensemble_preds_labeled]
     acc_ens = accuracy_score(rt_labeled["pred"], final_labeled)
     print("\n===== ENSEMBLE =====")
     print(f"Accuracy en Rotten Tomatoes (con labels) [Ensemble]: {acc_ens:.4f}")
 
-    # Ensemble para Rotten Tomatoes sin labels
+    # Ensemble para Rotten Tomatoes 
     ensemble_preds_unlabeled = np.array(all_preds_unlabeled).T
     final_unlabeled = [np.bincount(row).argmax() for row in ensemble_preds_unlabeled]
 
